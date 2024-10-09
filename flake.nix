@@ -36,16 +36,20 @@
           nix.settings.experimental-features = "nix-command flakes";
 
           users.users = let
-            sshKey = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINKZfejb9htpSB5K9p0RuEowErkba2BMKaze93ZVkQIE";
+            enzime = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINKZfejb9htpSB5K9p0RuEowErkba2BMKaze93ZVkQIE";
+            aarch64-darwin-vm = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOpzeF5WYPYAFZgGVbKVMQjErBDoQ77V9T8j7Gwa+hF3";
           in {
             enzime = {
               isNormalUser = true;
               extraGroups = [ "wheel" ];
               password = "apple";
-              openssh.authorizedKeys.keys = [ sshKey ];
+              openssh.authorizedKeys.keys = [
+                enzime
+                aarch64-darwin-vm
+              ];
             };
 
-            root.openssh.authorizedKeys.keys = [ sshKey ];
+            root.openssh.authorizedKeys.keys = [ enzime ];
           };
 
           disko.devices = {
@@ -88,6 +92,8 @@
         ({ pkgs, ... }:
 
         {
+          environment.systemPackages = [ pkgs.alacritty.terminfo ];
+
           networking.hostName = "hermes-macos-aarch64-darwin-vm";
 
           services.nix-daemon.enable = true;
@@ -106,6 +112,18 @@
           system.stateVersion = 5;
 
           nixpkgs.hostPlatform = "aarch64-darwin";
+
+          nix.distributedBuilds = true;
+
+          nix.buildMachines = [{
+            protocol = "ssh-ng";
+            hostName = "hermes-macos-aarch64-linux-vm";
+            sshUser = "enzime";
+            sshKey = "/etc/ssh/ssh_host_ed25519_key";
+            system = "aarch64-linux";
+            supportedFeatures = [ "kvm" "benchmark" "big-parallel" ];
+            publicHostKey = "c3NoLWVkMjU1MTkgQUFBQUMzTnphQzFsWkRJMU5URTVBQUFBSUgxVzluZU1xNFJWNTljSVMrTVNOSzU5QmJkcE5iaWo1d2lweVNVQThka3kgcm9vdEBoZXJtZXMtbWFjb3MtYWFyY2g2NC1saW51eC12bQo=";
+          }];
         })
       ];
     };
@@ -132,6 +150,13 @@
         text = ''
           nix copy --to ssh-ng://admin@hermes-macos-aarch64-darwin-vm ${./.}
           ssh -t admin@hermes-macos-aarch64-darwin-vm darwin-rebuild switch --flake ${./.}
+        '';
+      };
+      build-package = pkgs.writeShellApplication {
+        name = "build-package";
+        text = ''
+          nix copy --to ssh-ng://admin@hermes-macos-aarch64-darwin-vm ${./.}
+          ssh -t admin@hermes-macos-aarch64-darwin-vm nix build --print-build-logs ${./.}#packages.aarch64-linux.default
         '';
       };
     };
